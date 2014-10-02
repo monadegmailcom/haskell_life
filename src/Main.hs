@@ -2,7 +2,6 @@
 module Main where
 
 import qualified Data.Map as Map
-import qualified Data.Set as Set
 import Data.Maybe
 
 -- cell type
@@ -32,31 +31,47 @@ evolve _ cell nbh
           f _        s = s
 
 -- evolve cells and candidates one tick
-nextTick :: Map.Map Coord Cell -> Set.Set Coord -> (Map.Map Coord Cell, Set.Set Coord)
-nextTick cells coords = (remCells `Map.union` newCells, newCands) where
-    -- iterate all previous candidates and accumulate next cells and candidates
-    (remCells, newCells, newCands) = Set.foldr f (cells, Map.empty, Set.empty) coords where 
-        f coord (accRemCells, accCells, accCands) = (accRemCells', accCells', accCands') where
-            accRemCells' = Map.delete coord accRemCells
-            accCells'
-                | newCell == emptyCell = accCells
-                | otherwise            = Map.insert coord newCell accCells
-            accCands'
-                | newCell == prevCell = accCands
-                | otherwise          = foldr Set.insert accCands (coord:nbh)
-            prevCell = fromMaybe emptyCell (Map.lookup coord cells)
-            newCell = evolve coord prevCell nbh' where
-                nbh' = map g nbh
-                g coord' = (coord', Map.findWithDefault emptyCell coord' cells)
-            nbh = getNbh coord
+-- input: map of coordinate to pair of candidate flag and cell 
+-- the candidates flag indicates if a cell is checked for evolution in next tick
+-- non candidates are just copied
+-- a candidate is a cell which have changed or for which at least one neighbour has changed
+-- output: next generation map
+-- promise: empty cells are candidates
+nextTick :: Map.Map Coord (Bool, Cell) -> Map.Map Coord (Bool, Cell)
+-- fold previous map in new map starting with empty map
+nextTick cells = Map.foldrWithKey f Map.empty cells where
+    f coord (cand, cell) accCells = accCells' where
+        accCells'
+            -- just copy non-candidates, flag as candidate if already in accumulated map
+            | not cand = Map.alter g coord accCells
+            -- insert evolved cell and all neighbours in accumulated map
+            | otherwise = foldr h accCells $ (coord, newCell):nbs
+        -- flag as candidate if in accumulated map
+        g x = Just (isJust x, cell) 
+        -- insert as candidate cell if cell changed
+        h (x,y)  = Map.insert x (cell /= newCell, y)
+        -- new cell evolves from previous cell
+        newCell = evolve coord cell nbs
+        -- build neighbourhood list as (coord, cell) pairs
+        nbs = map i $ getNbh coord
+        -- find cell from coord
+        i coord'  = (coord', snd (Map.findWithDefault (False, emptyCell) coord' cells))
 
-nextTick2 :: Map.Map Coord (Bool, Cell) -> Map.Map Coord (Bool, Cell)
-nextTick2 cells = Map.foldrWithKey f M where
-    cells' = Map.empty
-
+-- initialize cell map from cell list
+initialize :: [(Coord, Cell)] -> Map.Map Coord (Bool, Cell)
+-- accumulate map from all cells and their neighbours starting with empty map
+initialize cells = foldr f Map.empty cells' where
+    -- insert candidate cell when not in already
+    f (coord, cell) = Map.alter g coord where 
+        g Nothing = Just (True, cell)
+        g _ = Nothing
+    -- add neighbours to cell list
+    cells' = cells ++ zip nbs (repeat emptyCell)
+    nbs = concatMap getNbh $ fst $ unzip cells
+    
 -- | The main entry point.
 main :: IO ()
 main = do
-    putStrLn "Welcome to FP Haskell Center!"
-    putStrLn "Have a good day!"
-    print $ getNbh (0,0)
+    putStrLn "Game of life"
+    let cells = [((0,0), True)]
+    print $ initialize cells
