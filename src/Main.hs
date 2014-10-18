@@ -1,9 +1,10 @@
 -- | Main entry point to the application.
 module Main where
 
+import qualified CGL
 import qualified Data.Map as Map
 import Control.Monad
-
+ 
 -- cell type
 type Cell = Bool
 
@@ -31,58 +32,7 @@ evolve _ cell nbh
                 f _        s = s
             in foldr f 0 nbh 
 
--- evolve cells and candidates one tick
--- input: map of coordinate to pair of candidate flag and cell 
--- the candidates flag indicates if a cell is checked for evolution in next tick
--- non candidates are not re-evaluated
--- a candidate is a cell for which at least one neighbour has changed
--- output: next generation map
--- promise: empty cells in map are candidates
-nextTick :: Map.Map Coord (Bool, Cell) -> Map.Map Coord (Bool, Cell)
--- fold previous map in new map starting with empty map
-nextTick cells = Map.foldrWithKey f Map.empty cells where
-    f coord (cand, cell) acc
-        -- unchanged and non-empty? see def
-        | not changed && cell /= emptyCell = acc2
-        -- changed? same as above plus all neighbours
-        | changed  = foldr f2 acc2 nbs
-        -- otherwise skip this cell
-        | otherwise = acc where
-            -- update accumulated cells
-            acc2 = Map.alter f3 coord acc where
-                f3 :: Maybe (Bool, Cell) -> Maybe (Bool, Cell)
-                -- insert as non-candidate when not already inserted
-                f3 Nothing = Just (False, newCell)
-                -- replace cell when found
-                f3 (Just (x, _)) = Just (x, newCell)
-            -- insert as candidate cell if cell changed
-            f2 (cand2, _) = Map.alter f3 cand2 where
-                f3 Nothing       = Just (True, emptyCell)
-                f3 (Just (_, x)) = Just (True, x)
-            -- new cell evolves from previous cell
-            (newCell, changed)
-                | not cand  = (cell, False)
-                | otherwise = (cell2, changed2) where
-                    cell2    = evolve coord cell nbs
-                    changed2 = cell2 /= cell
-        -- build neighbourhood list as (coord, cell) pairs
-            nbs = map f3 $ getNbh coord where
-                -- find cell from coord
-                f3 coord2  = (coord2, snd (Map.findWithDefault (False, emptyCell) coord2 cells))
-        
--- initialize cell map from cell list
-initialize :: [Coord] -> Map.Map Coord (Bool, Cell)
--- accumulate map from all cells and their neighbours starting with empty map
-initialize coords = foldr f cells nbs where
-    -- insert candidate cell when not in already
-    f = Map.alter g where
-        g Nothing = Just (True, False)
-        g x       = x
-    -- add neighbours to cell list
-    nbs = concatMap getNbh coords
-    cellList = zip coords $ repeat (True, True)
-    cells = Map.fromList cellList
-    
+   
 -- get enclosing coordinate rectangle frame of all cells (minX, minY, maxX, maxY)
 getFrame :: Map.Map Coord (Bool, Cell) -> (Int, Int, Int, Int)
 getFrame cells 
@@ -119,8 +69,12 @@ main = do
     --let floater = initialize [(0,2),(1,2),(2,2),(2,1),(1,0)] 
     --let block = initialize [(0,0),(0,1),(1,0),(1,1)]
     --let blinker = initialize [(0,0), (0,1),(0,2)]
-    let rpentomino = initialize [(1,0),(2,0),(0,1),(1,1),(1,2)]
+    --let rpentomino = initialize [(1,0),(2,0),(0,1),(1,1),(1,2)]
+
     f rpentomino 0 where
+        nextTick = CGL.nextTick False Map.empty getNbh evolve Map.alter Map.findWithDefault Map.foldrWithKey
+        rpentomino = CGL.initialize False getNbh Map.alter Map.fromList $ zip [(1,0),(2,0),(0,1),(1,1),(1,2)] (repeat True)
+        
         f :: Map.Map Coord (Bool, Cell) -> Int -> IO ()
         f cells n = do
             print n

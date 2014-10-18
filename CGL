@@ -1,0 +1,12 @@
+module CGL () where
+
+data World k a c = World {
+    defaultCell :: a,
+    emptyWorld :: c,
+    getNbh2 :: k -> [k],
+    evolve2 :: k -> a -> [(k,a)] -> a,
+    alter :: (Maybe (Bool, a) -> Maybe (Bool, a)) -> k -> c -> c,
+    findWithDefault :: (Bool, a) -> k -> c -> (Bool, a),
+    foldrWithKey :: (k -> (Bool, a) -> c -> c) -> c -> c -> c,
+    fromList :: [(k, (Bool, a))] -> c
+}
