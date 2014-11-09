@@ -1,6 +1,8 @@
 module CGL (
     nextTick,
     initialize,
+    Statistic(..),
+    getStatistic
     ) where
 
 -- evolve cells and candidates one tick
@@ -79,6 +81,39 @@ initialize
         g Nothing = Just (True, defaultCell)
         g x       = x
     -- add neighbours to cell list
-    nbs = concatMap (getNbh) coords
+    nbs = concatMap getNbh coords
     cells = fromList $ zip coords (zip (repeat True) cs)
     (coords, cs) = unzip coordCells
+
+data Statistic = Statistic {
+    cellCount :: Int,
+    nonDefaultCount :: Int,
+    candidateCount :: Int } 
+
+instance Show Statistic where
+    show s = 
+        let cc = cellCount s 
+            ndc = nonDefaultCount s
+            cac = candidateCount s
+        in "cells             = " ++ show cc ++ "\n" ++
+           "non default cells = " ++ show ndc ++ " (" ++ show (div (100*ndc) cc) ++ "%)\n" ++
+           "candidate cells   = " ++ show cac ++ " (" ++ show (div (100*cac) cc) ++ "%)\n"
+
+initStatistic :: Statistic
+initStatistic = Statistic 0 0 0
+
+getStatistic :: Eq a =>
+    a -> -- defaultCell
+    (((Bool, a) -> Statistic -> Statistic) -> Statistic -> Statistic) -> -- foldr
+    Statistic
+getStatistic
+    defaultCell
+    myfoldr = myfoldr f initStatistic where
+        f (cand, cell) stat = Statistic clc ndc cdc where
+            clc = 1 + cellCount stat
+            ndc
+                | cell /= defaultCell = 1 + nonDefaultCount stat
+                | otherwise           = nonDefaultCount stat
+            cdc
+                | cand      = 1 + candidateCount stat
+                | otherwise = candidateCount stat
