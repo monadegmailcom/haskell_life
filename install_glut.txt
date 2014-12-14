@@ -1,0 +1,26 @@
+>cabal install glut 
+does not work (needed gl)
+cabal install gl 
+does not work (needed cabal library >=1.18)
+>cabal info Cabal 
+Versions installed: 1.16.0
+>cabal install Cabal
+>cabal info Cabal
+Versions installed: 1.16.0, 1.20.0.2
+>cabal install gl
+still does not work: half-0.2.0.1 failed during the building phase
+>cabal install half
+half-0.2.0.1 failed during the building phase.
+>cabal install array
+Installed array-0.5.0.0
+>cabal install containers
+Installed containers-0.5.5.1
+>cabal install OpenGL
+failed: missing system gl libs
+>apt-cache search opengl
+>sudo apt-get install libghc-glut-dev
+>cabal install OpenGL
+Installed OpenGL-2.9.2.0
+>cabal install glut
+Installed GLUT-2.5.1.1
+

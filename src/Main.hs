@@ -24,7 +24,7 @@ main = do
     -- block = [(0,0),(0,1),(1,0),(1,1)]
     -- blinker = [(0,0), (0,1),(0,2)]
 
-    let rpentomino = Conway.initialize Conway.StrictMap [(1,0),(2,0),(0,1),(1,1),(1,2)]
+    let rpentomino = Conway.initialize Conway.LazyMap [(1,0),(2,0),(0,1),(1,1),(1,2)]
     let n = 1000
     let w = run rpentomino n
     putStr $ show (Conway.getStatistic w)

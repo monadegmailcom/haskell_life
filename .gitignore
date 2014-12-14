@@ -1,0 +1,10 @@
+*.swp
+*.hi
+*.o
+*.aux
+*.prof
+*.ps
+*.hp
+src/Main
+src/HelloWorld
+
