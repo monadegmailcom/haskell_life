@@ -1,4 +1,4 @@
-import Graphics.UI.GLUT
+import Graphics.UI.GLUT 
 
 drawRect :: Int -> Int -> Int -> IO ()
 drawRect n x y = rect v1 v2 where
