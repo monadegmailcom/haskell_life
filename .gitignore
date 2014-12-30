@@ -7,5 +7,4 @@
 *.hp
 src/Main
 src/HelloWorld
-
-/.dist-buildwrapper/
+dist/*

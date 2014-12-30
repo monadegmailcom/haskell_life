@@ -1,32 +1,67 @@
 import Graphics.UI.GLUT 
 
-drawRect :: Int -> Int -> Int -> IO ()
-drawRect n x y = rect v1 v2 where
-   v1 = Vertex2 (-1+r+2*rx/rn) (-1+r+2*ry/rn)
-   v2 = Vertex2 (-1-r+2*(rx+1)/rn) (-1-r+2*(ry+1)/rn)
-   rx = fromIntegral x 
-   ry = fromIntegral y
-   rn = fromIntegral n
-   r  = 0.01 :: GLfloat
+-- coordinate >= 0 to position in [-1,1]
+c2p :: Fractional a => a -> a -> a
+c2p c n = -1+2*c/n
 
+-- position in [0,1] to coordinate >= 0
+p2c :: RealFrac a => a -> a -> Int 
+p2c p n = floor $ n*(p+1)/2
+
+-- fill grid n >= 0 and cell (x,y) with spacing r >= 0
+drawRect :: GLfloat -> Int -> Int -> Int -> IO ()
+drawRect r n x y = rect v1 v2 where
+   v1  = Vertex2 ( r + f rx    ) ( r + f ry    )
+   v2  = Vertex2 (-r + f (rx+1)) (-r + f (ry+1))
+   f t = c2p t rn
+   rx  = fromIntegral x
+   ry  = fromIntegral y
+   rn  = fromIntegral n
+
+-- draw grid n > 0
 drawGrid :: Int -> IO ()
 drawGrid n = renderPrimitive Lines $
    mapM_ (\(x, y) -> vertex $ Vertex2 x y) (hLines ++ vLines) where
-      hLines = [ (x, -1+2*y/rn) | y <- [0..rn], x <- [-1,1]] 
-      vLines = [ (-1+2*x/rn, y) | x <- [0..rn], y <- [-1,1]] 
-      rn = fromIntegral n :: GLfloat
+      hLines = [ (x  , f y) | y <- [0..rn], x <- [-1,1]]
+      vLines = [ (f x, y  ) | x <- [0..rn], y <- [-1,1]]
+      f r    = c2p r rn
+      rn     = fromIntegral n :: GLfloat
 
 main :: IO ()
 main = do
-  (_progName, _args) <- getArgsAndInitialize
-  _window <- createWindow "Hello World"
-  displayCallback $= display
+  -- grid size
+  let n  = 10   :: Int
+  -- grid spacing for cell fill
+  let r  = 0.01 :: GLfloat
+  -- window caption
+  let c  = "2 Dim Grid"
+  --(_progName, _args) <- getArgsAndInitialize
+  _window            <- createWindow c
+  displayCallback $= display r n [] 
+  mouseCallback   $= Just (mouse r n)
   mainLoop
- 
-display :: DisplayCallback
-display = do 
+
+-- mouse event callback, fill grid cell on left click
+-- r >= 0: cell fill spacing
+-- n > 0:  grid size
+mouse :: GLfloat -> Int -> MouseCallback
+mouse r n LeftButton Down (Position px py) = do
+  -- calc pos in [-1,1] from mouse click pos
+  Size sx sy <- get windowSize
+  let x  = -1 + 2 * (fromIntegral px / fromIntegral sx)
+  let y  =  1 - 2 * (fromIntegral py / fromIntegral sy)
+  let rn = fromIntegral n :: GLfloat
+  -- calc coord from pos
+  let cx = p2c x rn
+  let cy = p2c y rn
+  drawRect r n cx cy 
+  flush 
+mouse _ _ _ _ _ = return ()
+
+display :: GLfloat -> Int -> [(Int,Int)] -> DisplayCallback
+display r n cs = do 
   clear [ColorBuffer]
-  let n = 10
   drawGrid n  
-  drawRect n 2 1
+  mapM_ (uncurry $ drawRect r n) cs 
   flush
+
