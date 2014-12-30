@@ -5,6 +5,7 @@
 *.prof
 *.ps
 *.hp
+.DS_Store
 src/Main
 src/HelloWorld
 dist/*

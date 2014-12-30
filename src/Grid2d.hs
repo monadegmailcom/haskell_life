@@ -35,11 +35,21 @@ main = do
   let r  = 0.01 :: GLfloat
   -- window caption
   let c  = "2 Dim Grid"
-  --(_progName, _args) <- getArgsAndInitialize
+  (_progName, _args) <- getArgsAndInitialize
   _window            <- createWindow c
   displayCallback $= display r n [] 
+  reshapeCallback $= Just reshape 
   mouseCallback   $= Just (mouse r n)
   mainLoop
+
+-- reshape with constraints on minimum size and quadratic aspect ratio
+reshape :: ReshapeCallback
+reshape s@(Size x y) = do 
+  Size sx sy <- get screenSize
+  let m = max (min x y) (min (div sx 10) (div sy 10))
+  let n = Size m m 
+  windowSize $= n
+  viewport   $= (Position 0 0, s)
 
 -- mouse event callback, fill grid cell on left click
 -- r >= 0: cell fill spacing
@@ -50,10 +60,11 @@ mouse r n LeftButton Down (Position px py) = do
   Size sx sy <- get windowSize
   let x  = -1 + 2 * (fromIntegral px / fromIntegral sx)
   let y  =  1 - 2 * (fromIntegral py / fromIntegral sy)
-  let rn = fromIntegral n :: GLfloat
   -- calc coord from pos
+  let rn = fromIntegral n :: GLfloat
   let cx = p2c x rn
   let cy = p2c y rn
+  -- fill cell
   drawRect r n cx cy 
   flush 
 mouse _ _ _ _ _ = return ()
@@ -64,4 +75,3 @@ display r n cs = do
   drawGrid n  
   mapM_ (uncurry $ drawRect r n) cs 
   flush
-
