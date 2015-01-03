@@ -13,7 +13,8 @@ data-files:
 executable Grid2d 
   build-depends:   base >= 4,
                    containers,
-                   GLUT
+                   GLUT,
+                   mtl
   ghc-options:     -Wall -rtsopts
   main-is:         Grid2d.hs
   hs-source-dirs:  src
