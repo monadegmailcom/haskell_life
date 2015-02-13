@@ -1,44 +1,53 @@
-import Graphics.UI.GLUT 
+import Graphics.UI.GLUT as Gl
 import Data.IORef
 import qualified Data.Set as Set 
-import Control.Monad (liftM)
+import Control.Monad (when) 
+import Data.Maybe (fromJust,isJust)
 
--- coordinate to viewport position 
--- (0,0) -> (-1,1), (n,n) -> (1,-1)
-c2p :: (Int,Int) -> (Int,Int) -> (GLfloat,GLfloat)
-c2p (cx,cy) (n,k) = (f cx n,-f cy k) where
-  f c m = -1+2*c'/m' where
-    c' = fromIntegral c
-    m' = fromIntegral m
+-- Display 2-dim cell grid as orthogonal projection without perspective
+-- distortion. The grid is an unbounded equally spaced grid of width 1. The
+-- viewing rectangle has exactly the size of the window with an optional 
+-- offset in x and y direction. A variable scaling factor determines the
+-- viewing volume. The user can interactively resize the window or zoom in
+-- and out to change the viewing volume size and move the underlying grid
+-- by dragging. Cells can be set and removed from the grid.
 
--- viewport position to coordinate 
-p2c :: (GLfloat,GLfloat) -> (Int,Int) -> (Int,Int)
-p2c (px,py) (n,k) = (f px n,k-1-f py k) where
-  f p m = floor $ m'*(p+1)/2 where
-    m' = fromIntegral m
+-- fill cell 
+drawRect :: (Int,Int) -> IO () 
+drawRect (cx,cy) = rect v1 v2 where
+   v1 = Vertex2 x y
+   v2 = Vertex2 (x+1) (y+1)
+   x = fromIntegral cx 
+   y = fromIntegral cy
+    
+-- left right bottom top
+drawGrid :: Int -> Int -> Int -> Int -> IO ()
+drawGrid l r b t = renderPrimitive Lines $ mapM_ f (hl ++ vl) where
+  f  = vertex . uncurry Vertex2
+  -- horizontal lines
+  hl = merge p1 p2
+  p1 = zip (repeat $ fromIntegral l) r1 
+  p2 = zip (repeat $ fromIntegral r) r1 
+  r1 = map fromIntegral [b..t] :: [GLfloat]
+  -- vertical lines
+  vl = merge q1 q2
+  q1 = zip r2 (repeat $ fromIntegral b)
+  q2 = zip r2 (repeat $ fromIntegral t)
+  r2 = map fromIntegral [l..r] :: [GLfloat] 
 
--- fill cell with spacing 
-drawRect :: (Int,Int) -> (Int,Int) -> IO () 
-drawRect d c@(cx,cy) = rect v1 v2 where
-   v1 = uncurry Vertex2 $ c2p c d
-   v2 = uncurry Vertex2 $ c2p (cx+1,cy+1) d
-   
--- draw grid 
-drawGrid :: (Int,Int) -> IO ()
-drawGrid d@(n,k) = renderPrimitive Lines $
-   mapM_ (\(x, y) -> vertex $ Vertex2 x y) (hl ++ vl) where
-      hl = [ c2p (x,y) d | y <- [0..k], x <- [0,n]]
-      vl = [ c2p (x,y) d | x <- [0..n], y <- [0,k]]
-
--- cell coordinate map
+  merge [] ys = ys
+  merge (x:xs) ys = x:merge ys xs
+  
+-- cell coordinate set 
 type Coords = Set.Set (Int,Int) 
 
-toSize :: Int -> Int -> Size
-toSize x y = Size (fromIntegral x) (fromIntegral y)
-fromSize :: Size -> (Int,Int)
-fromSize (Size x y) = (fromIntegral x,fromIntegral y)
-fromPosition :: Position -> (Int,Int)
-fromPosition (Position x y) = (fromIntegral x,fromIntegral y)
+-- left, top, scale
+data Grid = Grid GLdouble GLdouble GLdouble
+-- save mouse position and grid state at the moment of a mouse click.
+-- the boolean parameter is False on a click-and-motion event, True
+-- otherwise.
+data MotionMode = Motion | Zoom deriving Eq
+data MotionState = MotionState Position Grid MotionMode Bool 
 
 main :: IO ()
 main = do
@@ -50,84 +59,120 @@ main = do
   _window <- createWindow cCaption
 
   -- get current window size
-  Size wx wy <- get windowSize
+  Size wx _ <- get windowSize
 
   -- default number of cells in x dim
-  let cdefX = 10 
+  let cdefX = 10 :: Int
+ 
+  let sc = fromIntegral wx / fromIntegral cdefX :: GLdouble
 
-  -- get number of cells in x and y dim and width in pixels
-  let (n,k,w) = getDim cdefX wx wy :: (Int,Int,Int)
-      
-  -- resize current window
-  windowSize $= toSize (n*w) (k*w) 
-
-  -- reference var for grid dimension 
-  dim <- newIORef (n,k,w) :: IO (IORef (Int,Int,Int))
+  -- reference var for grid
+  gridRef <- newIORef (Grid 0 0 sc) :: IO (IORef Grid)
 
   -- reference var for grid cell set
-  cs <- newIORef Set.empty :: IO (IORef Coords)
+  csRef <- newIORef Set.empty :: IO (IORef Coords)
+
+  -- reference for initial mouse move position
+  msRef <- newIORef Nothing :: IO (IORef (Maybe MotionState))
 
   -- set callbacks
-  displayCallback $= display dim cs 
-  reshapeCallback $= Just (reshape dim)
-  mouseCallback   $= Just (mouse dim cs)
+  displayCallback       $= display gridRef csRef
+  motionCallback        $= Just (motion msRef gridRef)
+  keyboardMouseCallback $= Just (keyboardMouse msRef gridRef csRef)
 
   -- enter mainloop
   mainLoop 
 
-  where
-    getDim n wx wy = (n',k,w) where
-      k = max 1 $ div (n'*wy') wx' 
-      w = max 1 $ div wx' n' 
-      wx' = fromIntegral $ max 1 wx 
-      wy' = fromIntegral wy
-      n'  = max 1 n
-
--- resize dim and window 
-reshape :: IORef (Int,Int,Int) -> ReshapeCallback
-reshape dim s = do 
-  -- resize dim according to resized window
-  modifyIORef dim f
-
-  -- resize window accoring to dim
-  (n,k,w)    <- get dim
-  windowSize $= toSize (n*w) (k*w) 
-
-  -- set new viewport
-  viewport   $= (Position 0 0, s) 
-
-  where
-    f (_,_,w) = (g sx,g sy,w) where
-      g = max 1 . flip div w
-      (sx,sy) = fromSize s
-
--- mouse event callback, toggle grid cell on left click
-mouse :: IORef (Int,Int,Int) -> IORef Coords -> MouseCallback
-mouse dim cs LeftButton Down pos = do
+toggle :: IORef Grid -> IORef Coords -> Position -> IO ()
+toggle gridRef csRef (Position px py) = do
   -- calc coord from pos
-  s <- liftM fromSize $ get windowSize
-  let w = fromPosition pos
-  (n,k,_) <- get dim
-  modifyIORef cs $ f (n,k) s w 
-  
+  Grid l t sc <- get gridRef
+  let c = (floor $ (l+fromIntegral px)/sc,
+           floor $ (t-fromIntegral py)/sc)
+  modifyIORef csRef $ f c 
   postRedisplay Nothing 
-  
   where
     -- toggle cell membership in set
-    f d s w set   
+    f c set   
       | Set.member c set = Set.delete c set  
-      | otherwise        = Set.insert c set where
-        c = p2c p d
-        -- calc viewport pos from mouse click pos
-        p = c2p w s 
-mouse _ _ _ _ _ = return ()
+      | otherwise        = Set.insert c set 
 
--- display grid and set cells
-display :: IORef (Int,Int,Int) -> IORef Coords -> DisplayCallback
-display dim cs = do 
+keyboardMouse :: IORef (Maybe MotionState) -> IORef Grid -> IORef Coords
+  -> KeyboardMouseCallback
+keyboardMouse msRef gridRef _ (MouseButton LeftButton) Down 
+              (Modifiers Up Up Up) pos = do
+  grid <- get gridRef
+  modifyIORef msRef $ const (Just (MotionState pos grid Motion True))
+keyboardMouse msRef gridRef _ (MouseButton LeftButton) Down 
+              _ pos = do
+  grid <- get gridRef
+  modifyIORef msRef $ const (Just (MotionState pos grid Zoom True)) 
+keyboardMouse msRef g cs (MouseButton LeftButton) Up _ pos = do
+  ms <- get msRef
+  modifyIORef msRef $ const Nothing 
+  when (isJust ms) $ do
+    let MotionState _ _ _ clicked = fromJust ms
+    when clicked  $ toggle g cs pos 
+keyboardMouse _ _ _ _ _ _ _ = return ()
+
+motion :: IORef (Maybe MotionState) -> IORef Grid -> MotionCallback
+motion msRef gridRef (Position px py) = do 
+  ms <- get msRef
+  when (isJust ms) $ do
+    let MotionState p@(Position mx my) g@(Grid l t sc) mode _ = fromJust ms 
+    let (dx,dy) = (fromIntegral (mx-px),fromIntegral (py-my)) 
+    if mode == Motion
+      then gridRef $~ const (Grid (l+dx) (t+dy) sc) 
+      else do
+        let f = exp (0.01*dy)
+        Size wx wy <- get windowSize 
+        let x = l*f-(1-f)*fromIntegral wx/2
+        let y = t*f+(1-f)*fromIntegral wy/2
+        gridRef $~ const (Grid x y (f*sc))
+    modifyIORef msRef $ const (Just (MotionState p g mode False))
+    postRedisplay Nothing 
+
+prepareProjection :: Grid -> IO ()
+prepareProjection (Grid left top sc) = do
+  Size sx sy <- get windowSize
+  let right  = left + fromIntegral sx
+  let bottom = top - fromIntegral sy
+
+  -- prepare projection
+  matrixMode $= Projection
+  loadIdentity
+  ortho2D left right bottom top
+  scale sc sc 1.0
+
+prepareModelview :: Grid -> Coords -> IO ()
+prepareModelview (Grid left top sc) cs = do
   clear [ColorBuffer]
-  d <- liftM (\(n,k,_) -> (n,k)) $ get dim
-  drawGrid d 
-  s <- get cs 
-  mapM_ (drawRect d) (Set.elems s) 
-  flush
+
+  -- prepare model view
+  matrixMode $= Modelview 1 
+  loadIdentity
+  lookAt (Vertex3 left top 1) (Vertex3 left top 0) (Vector3 0 1 0) 
+  Size wx wy <- get windowSize
+  let l = floor $ left/sc
+  let r = ceiling $ (left+fromIntegral wx)/sc
+  let b = floor $ (top-fromIntegral wy)/sc
+  let t = ceiling $ top/sc
+  drawGrid l r b t 
+
+  -- filter cells that fall in viewing volume
+  let cells = filter (\(x,y) -> l <= x && x <= r && b <= y && y <= t) 
+              $ Set.elems cs
+  mapM_ drawRect cells 
+
+display :: IORef Grid -> IORef Coords -> DisplayCallback
+display gridRef csRef = do
+  -- update grid
+  g <- get gridRef
+
+  prepareProjection g
+
+  cs <- get csRef
+  prepareModelview g cs
+
+  flush 
+
