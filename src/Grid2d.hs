@@ -17,8 +17,8 @@ drawRect :: (Int,Int) -> IO ()
 drawRect (cx,cy) = rect v1 v2 where
    v1 = Vertex2 x y
    v2 = Vertex2 (x+1) (y+1)
-   x = fromIntegral cx 
-   y = fromIntegral cy
+   x = fromIntegral cx :: GLfloat
+   y = fromIntegral cy :: GLfloat
     
 -- left right bottom top
 drawGrid :: Int -> Int -> Int -> Int -> IO ()
