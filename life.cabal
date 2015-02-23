@@ -7,8 +7,9 @@ data-files:
                 CGL.hs, 
                 Conway.hs, 
                 Grid2d.hs, 
-                life.cabal, 
-                Main.hs
+                Main.hs,
+                Grid2dModel.hs,
+                life.cabal 
 
 executable Grid2d 
   build-depends:   base >= 4,

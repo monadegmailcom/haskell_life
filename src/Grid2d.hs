@@ -1,8 +1,10 @@
-import Graphics.UI.GLUT as Gl
+import Graphics.UI.GLUT 
 import Data.IORef
-import qualified Data.Set as Set 
 import Control.Monad (when) 
 import Data.Maybe (fromJust,isJust)
+import Grid2dModel as Model
+import Control.Concurrent.MVar (MVar, newEmptyMVar, tryTakeMVar, tryPutMVar)
+import Control.Concurrent (forkIO)
 
 -- Display 2-dim cell grid as orthogonal projection without perspective
 -- distortion. The grid is an unbounded equally spaced grid of width 1. The
@@ -38,9 +40,6 @@ drawGrid l r b t = renderPrimitive Lines $ mapM_ f (hl ++ vl) where
   merge [] ys = ys
   merge (x:xs) ys = x:merge ys xs
   
--- cell coordinate set 
-type Coords = Set.Set (Int,Int) 
-
 -- left, top, scale
 data Grid = Grid GLdouble GLdouble GLdouble
 -- save mouse position and grid state at the moment of a mouse click.
@@ -70,35 +69,47 @@ main = do
   gridRef <- newIORef (Grid 0 0 sc) :: IO (IORef Grid)
 
   -- reference var for grid cell set
-  csRef <- newIORef Set.empty :: IO (IORef Coords)
+  csRef <- newIORef [] :: IO (IORef [(Int,Int)])
 
+  view2model <- newEmptyMVar :: IO (MVar Model.Command)
+  model2view <- newEmptyMVar :: IO (MVar Model.Update)
+  
+  _ <- forkIO $ Model.run view2model model2view
+  
   -- reference for initial mouse move position
   msRef <- newIORef Nothing :: IO (IORef (Maybe MotionState))
 
   -- set callbacks
   displayCallback       $= display gridRef csRef
   motionCallback        $= Just (motion msRef gridRef)
-  keyboardMouseCallback $= Just (keyboardMouse msRef gridRef csRef)
+  keyboardMouseCallback $= Just (keyboardMouse msRef gridRef view2model)
+  idleCallback          $= Just (onIdle model2view csRef)
 
   -- enter mainloop
   mainLoop 
 
-toggle :: IORef Grid -> IORef Coords -> Position -> IO ()
-toggle gridRef csRef (Position px py) = do
+onIdle :: MVar Model.Update -> IORef [(Int,Int)] -> IdleCallback
+onIdle cmdVar csRef = do
+  maybeCmd <- tryTakeMVar cmdVar 
+  case maybeCmd of
+    Just (Model.UpdateCells ls) -> do
+      csRef $= ls
+      postRedisplay Nothing
+    _ -> return ()
+
+toggle :: IORef Grid -> MVar Model.Command -> Position -> IO ()
+toggle gridRef cmdVar (Position px py) = do
   -- calc coord from pos
   Grid l t sc <- get gridRef
   let c = (floor $ (l+fromIntegral px)/sc,
            floor $ (t-fromIntegral py)/sc)
-  modifyIORef csRef $ f c 
-  postRedisplay Nothing 
-  where
-    -- toggle cell membership in set
-    f c set   
-      | Set.member c set = Set.delete c set  
-      | otherwise        = Set.insert c set 
+  -- overwrite last command
+  _ <- tryTakeMVar cmdVar 
+  _ <- tryPutMVar  cmdVar $ Model.ToggleCell c 
+  return ()
 
-keyboardMouse :: IORef (Maybe MotionState) -> IORef Grid -> IORef Coords
-  -> KeyboardMouseCallback
+keyboardMouse :: IORef (Maybe MotionState) -> IORef Grid 
+  -> MVar Model.Command -> KeyboardMouseCallback
 keyboardMouse msRef gridRef _ (MouseButton LeftButton) Down 
               (Modifiers Up Up Up) pos = do
   grid <- get gridRef
@@ -107,12 +118,12 @@ keyboardMouse msRef gridRef _ (MouseButton LeftButton) Down
               _ pos = do
   grid <- get gridRef
   modifyIORef msRef $ const (Just (MotionState pos grid Zoom True)) 
-keyboardMouse msRef g cs (MouseButton LeftButton) Up _ pos = do
+keyboardMouse msRef g cmdVar (MouseButton LeftButton) Up _ pos = do
   ms <- get msRef
   modifyIORef msRef $ const Nothing 
   when (isJust ms) $ do
     let MotionState _ _ _ clicked = fromJust ms
-    when clicked  $ toggle g cs pos 
+    when clicked  $ toggle g cmdVar pos 
 keyboardMouse _ _ _ _ _ _ _ = return ()
 
 motion :: IORef (Maybe MotionState) -> IORef Grid -> MotionCallback
@@ -144,14 +155,13 @@ prepareProjection (Grid left top sc) = do
   ortho2D left right bottom top
   scale sc sc 1.0
 
-prepareModelview :: Grid -> Coords -> IO ()
+prepareModelview :: Grid -> [(Int,Int)] -> IO ()
 prepareModelview (Grid left top sc) cs = do
   clear [ColorBuffer]
-
-  -- prepare model view
   matrixMode $= Modelview 1 
   loadIdentity
   lookAt (Vertex3 left top 1) (Vertex3 left top 0) (Vector3 0 1 0) 
+
   Size wx wy <- get windowSize
   let l = floor $ left/sc
   let r = ceiling $ (left+fromIntegral wx)/sc
@@ -160,11 +170,10 @@ prepareModelview (Grid left top sc) cs = do
   drawGrid l r b t 
 
   -- filter cells that fall in viewing volume
-  let cells = filter (\(x,y) -> l <= x && x <= r && b <= y && y <= t) 
-              $ Set.elems cs
-  mapM_ drawRect cells 
+  let cs' = filter (\(x,y) -> l <= x && x <= r && b <= y && y <= t) cs
+  mapM_ drawRect cs' 
 
-display :: IORef Grid -> IORef Coords -> DisplayCallback
+display :: IORef Grid -> IORef [(Int,Int)] -> DisplayCallback
 display gridRef csRef = do
   -- update grid
   g <- get gridRef
