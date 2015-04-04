@@ -7,6 +7,7 @@ module Conway (
     Cell,
     World,
     Statistic(..),
+    getCells,
     getStatistic ) where
 
 import qualified CGL
@@ -27,21 +28,21 @@ getNbh (x,y) = [(x-1,y-1), (x,y-1), (x+1,y-1), (x-1,y), (x+1,y), (x-1,y+1), (x,y
 evolve :: Coord -> Cell -> [(Coord, Cell)] -> Cell
 evolve _ cell nbh
     -- birth when 3 neighbours
-    | not cell  = c == 3 
+    | not cell  = c == 3
     -- survival when between 2 and 3 neighbours
-    | otherwise = c >= 2 && c <= 3 where 
+    | otherwise = c >= 2 && c <= 3 where
         -- count neighbours
         c :: Int
         c = let f (_,True) s = s+1
                 f _        s = s
-            in foldr f 0 nbh 
+            in foldr f 0 nbh
 
-data Container = 
+data Container =
     StrictMap |
     LazyMap
 
-data World = 
-    Strict (SMap.Map Coord (Bool, Cell)) | 
+data World =
+    Strict (SMap.Map Coord (Bool, Cell)) |
     Lazy   (LMap.Map Coord (Bool, Cell))
 
 nextTick :: World -> World
@@ -66,6 +67,12 @@ mykeys :: World -> [Coord]
 mykeys (Strict cells) = SMap.keys cells
 mykeys (Lazy   cells) = LMap.keys cells
 
+getCells :: World -> [Coord]
+getCells (Lazy cs) = map fst . filter p . LMap.toList $ cs where
+  p (_, (_,c)) = c
+getCells (Strict cs) = map fst . filter p . LMap.toList $ cs where
+    p (_, (_,c)) = c
+
 -- draw cells
 draw :: World -> String
 draw w = header ++ pic where
@@ -86,19 +93,19 @@ draw w = header ++ pic where
 
 data Statistic = Statistic {
     statistic :: CGL.Statistic,
-    minXCoord :: Int, 
-    minYCoord :: Int, 
-    maxXCoord :: Int, 
-    maxYCoord :: Int } 
-    
+    minXCoord :: Int,
+    minYCoord :: Int,
+    maxXCoord :: Int,
+    maxYCoord :: Int }
+
 instance Show Statistic where
-    show s = 
+    show s =
         show (statistic s) ++
-        "min x = " ++ show (minXCoord s) ++ "\n" ++ 
-        "min y = " ++ show (minYCoord s) ++ "\n" ++ 
-        "max x = " ++ show (maxXCoord s) ++ "\n" ++ 
+        "min x = " ++ show (minXCoord s) ++ "\n" ++
+        "min y = " ++ show (minYCoord s) ++ "\n" ++
+        "max x = " ++ show (maxXCoord s) ++ "\n" ++
         "max y = " ++ show (maxYCoord s) ++ "\n"
-        
+
 myFoldr :: World -> ((Bool, Cell) -> CGL.Statistic -> CGL.Statistic) -> CGL.Statistic -> CGL.Statistic
 myFoldr (Strict cells) = \f a1 -> SMap.foldr f a1 cells
 myFoldr (Lazy   cells) = \f a1 -> LMap.foldr f a1 cells
@@ -107,4 +114,3 @@ getStatistic :: World -> Statistic
 getStatistic w = Statistic stat minX minY maxX maxY where
     stat                     = CGL.getStatistic False $ myFoldr w
     (minX, minY, maxX, maxY) = getFrame $ mykeys w
-    

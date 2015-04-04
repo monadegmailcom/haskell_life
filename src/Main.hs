@@ -14,13 +14,13 @@ interactive w n = do
     print n
     putStr $ Conway.draw w
     input <- getChar
-    unless (input == 'q') $ interactive (Conway.nextTick w) (n+1) 
-    
+    unless (input == 'q') $ interactive (Conway.nextTick w) (n+1)
+
 -- | The main entry point.
 main :: IO ()
 main = do
     putStrLn "Game of life"
-    -- floater = [(0,2),(1,2),(2,2),(2,1),(1,0)] 
+    -- floater = [(0,2),(1,2),(2,2),(2,1),(1,0)]
     -- block = [(0,0),(0,1),(1,0),(1,1)]
     -- blinker = [(0,0), (0,1),(0,2)]
 
