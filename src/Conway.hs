@@ -8,6 +8,8 @@ module Conway (
     World,
     Statistic(..),
     getCells,
+    hasCell,
+    modifyCell,
     getStatistic ) where
 
 import qualified CGL
@@ -53,6 +55,12 @@ initialize :: Container -> [Coord] -> World
 initialize StrictMap ls = Strict $ CGL.initialize False getNbh SMap.alter SMap.fromList $ zip ls (repeat True)
 initialize LazyMap ls = Lazy $ CGL.initialize False getNbh LMap.alter LMap.fromList $ zip ls (repeat True)
 
+modifyCell :: World -> Coord -> (Cell -> Cell) -> World
+modifyCell (Strict m) c modify =
+  Strict $ CGL.modifyCell False getNbh SMap.alter c modify m
+modifyCell (Lazy m) c modify =
+  Lazy $ CGL.modifyCell False getNbh LMap.alter c modify m
+
 -- get enclosing coordinate rectangle frame of all cells (minX, minY, maxX, maxY)
 getFrame :: [Coord] -> (Int, Int, Int, Int)
 getFrame [] = (0, 0, 0, 0)
@@ -62,6 +70,11 @@ getFrame coords = (minimum xs, minimum ys, maximum xs, maximum ys) where
 mylookup :: World -> Coord -> Maybe (Bool, Cell)
 mylookup (Strict cells) coord = SMap.lookup coord cells
 mylookup (Lazy   cells) coord = LMap.lookup coord cells
+
+hasCell :: World -> Coord -> Bool
+hasCell w = g . (mylookup w) where
+  g Nothing  = False
+  g (Just v) = snd v
 
 mykeys :: World -> [Coord]
 mykeys (Strict cells) = SMap.keys cells

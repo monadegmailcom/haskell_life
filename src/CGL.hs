@@ -1,12 +1,13 @@
 module CGL (
     nextTick,
     initialize,
+    modifyCell,
     Statistic(..),
     getStatistic
     ) where
 
 -- evolve cells and candidates one tick
--- input: map of coordinate to pair of candidate flag and cell 
+-- input: map of coordinate to pair of candidate flag and cell
 -- the candidates flag indicates if a cell is checked for evolution in next tick
 -- non candidates are not re-evaluated
 -- a candidate is a cell for which at least one neighbour has changed
@@ -22,15 +23,15 @@ nextTick :: Eq a =>
     ((k -> (Bool, a) -> c -> c) -> c -> c -> c) -> -- foldr with key
     c -> -- current world
     c    -- new world
-nextTick 
+nextTick
     defaultCell
     emptyWorld
-    getNbh 
+    getNbh
     evolve
     alter
     findWithDefault
     foldrWithKey
-    cells 
+    cells
     = foldrWithKey f emptyWorld cells where
     f coord (cand, cell) acc
         -- unchanged and non-empty? see def
@@ -62,15 +63,15 @@ nextTick
                 f3 coord2  = (coord2, snd (findWithDefault (False, defaultCell) coord2 cells))
 
 -- initialize cell map from cell list
-initialize :: 
+initialize ::
     a -> -- defaultCell
     (k -> [k]) -> -- get neighbourhood of cells
     ((Maybe (Bool, a) -> Maybe (Bool, a)) -> k -> c -> c) -> -- alter
     ([(k, (Bool, a))] -> c) -> -- from list
-    [(k, a)] -> 
+    [(k, a)] ->
     c
 -- accumulate map from all cells and their neighbours starting with empty map
-initialize 
+initialize
     defaultCell
     getNbh
     alter
@@ -85,14 +86,30 @@ initialize
     cells = fromList $ zip coords (zip (repeat True) cs)
     (coords, cs) = unzip coordCells
 
+modifyCell ::
+  a -> -- defaultCell
+  (k -> [k]) -> -- get neighbourhood of cells
+  ((Maybe (Bool, a) -> Maybe (Bool, a)) -> k -> c -> c) -> -- alter
+  k -> -- coordinates
+  (a -> a) -> -- change
+  c -> c
+modifyCell dc getNbh alter k modify c = foldr f c' nbs where
+  c' = alter g k c where
+    g Nothing  = Just (True, modify dc)
+    g (Just (_, x)) = Just (True, modify x)
+  f = alter g where
+    g Nothing = Just (True, dc)
+    g x       = x
+  nbs = getNbh k
+
 data Statistic = Statistic {
     cellCount :: Int,
     nonDefaultCount :: Int,
-    candidateCount :: Int } 
+    candidateCount :: Int }
 
 instance Show Statistic where
-    show s = 
-        let cc = cellCount s 
+    show s =
+        let cc = cellCount s
             ndc = nonDefaultCount s
             cac = candidateCount s
         in "cells             = " ++ show cc ++ "\n" ++
