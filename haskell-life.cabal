@@ -6,7 +6,7 @@ version:             0.1.0.0
 -- synopsis:            
 -- description:         
 -- license:             
-license-file:        LICENSE
+-- license-file:        LICENSE
 author:              monade
 maintainer:          monade@gmail.com
 -- copyright:           
@@ -15,9 +15,10 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
+
 executable haskell-life
   main-is:             Grid2d.hs
-  -- other-modules:       
+  other-modules:       CGL, Conway, Grid2dModel 
   -- other-extensions:    
   build-depends:       base >=4.8 && <4.9, containers >=0.5 && <0.6, GLUT >=2.7 && <2.8
   hs-source-dirs:      src

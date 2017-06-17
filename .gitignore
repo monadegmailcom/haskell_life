@@ -9,3 +9,5 @@
 src/Main
 src/HelloWorld
 dist/*
+.stack-work
+TAGS
