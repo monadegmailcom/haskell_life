@@ -3,9 +3,4 @@ extra-package-dbs: []
 packages:
 - '.'
 extra-deps:
-- GLURaw-1.5.0.2
-- GLUT-2.7.0.3
-- ObjectName-1.1.0.0
-- OpenGL-2.13.1.0
-- OpenGLRaw-2.5.5.0
-resolver: lts-3.2
+resolver: lts-8.18

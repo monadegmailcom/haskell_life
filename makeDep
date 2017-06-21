@@ -1,0 +1,1 @@
+find src/HashLife -name '*.hs' | xargs graphmod -q --no-cabal | dot -Tpng -o out.png
